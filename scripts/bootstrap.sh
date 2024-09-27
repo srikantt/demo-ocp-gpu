@@ -87,10 +87,10 @@ ocp_control_nodes_schedulable(){
 ocp_aws_clone_machineset(){
   [ -z "${1}" ] && \
   echo "
-    usage: ocp_aws_create_gpu_machineset < instance type, default g4dn.4xlarge >
+    usage: ocp_aws_create_gpu_machineset < instance type, default p4d.24xlarge >
   "
 
-  INSTANCE_TYPE=${1:-g4dn.4xlarge}
+  INSTANCE_TYPE=${1:-p3.2xlarge}
   MACHINE_SET=$(oc -n openshift-machine-api get machinesets.machine.openshift.io -o name | grep worker | head -n1)
 
   # check for an existing instance machine set
@@ -119,7 +119,7 @@ ocp_aws_create_gpu_machineset(){
   # https://aws.amazon.com/ec2/instance-types/dl1
   # 8 x gaudi:  dl1.24xlarge
 
-  INSTANCE_TYPE=${1:-g4dn.4xlarge}
+  INSTANCE_TYPE=${1:-p3.2xlarge}
 
   ocp_aws_clone_machineset "${INSTANCE_TYPE}"
 
@@ -154,10 +154,10 @@ ocp_aws_create_gpu_machineset(){
 ocp_create_machineset_autoscale(){
   MACHINE_MIN=${1:-0}
   MACHINE_MAX=${2:-4}
-  MACHINE_SETS=${3:-$(oc -n openshift-machine-api get machinesets.machine.openshift.io -o name | sed 's@.*/@@' )}
+  MACHINE_SETS=${3:-$(oc -n openshift-machine-api get machinesets.machine.openshift.io -o name | grep p3 | sed 's@.*/@@' )}
 
-  for set in ${MACHINE_SETS}
-  do
+  for set in ${MACHINE_SETS};do
+  
 cat << YAML | oc apply -f -
 apiVersion: "autoscaling.openshift.io/v1beta1"
 kind: "MachineAutoscaler"
@@ -215,7 +215,7 @@ nvidia_setup_mig_config(){
   MIG_MODE=${1:-single}
   MIG_CONFIG=${1:-all-1g.5gb}
 
-  ocp_aws_create_gpu_machineset p4d.24xlarge "$(oc -n openshift-machine-api get machinesets.machine.openshift.io -o name | grep worker | grep east-2b | head -n1)"
+  ocp_aws_create_gpu_machineset p4d.24xlarge "$(oc -n openshift-machine-api get machinesets.machine.openshift.io -o name | grep p4d | grep east-2b | head -n1)"
 
   oc apply -k components/operators/gpu-operator-certified/instance/overlays/mig-"${MIG_MODE}"
 
@@ -230,13 +230,14 @@ nvidia_setup_mig_config(){
 ocp_aws_cluster_autoscaling(){
   oc apply -k components/configs/autoscale/overlays/gpus-accelerator-label
 
-  ocp_aws_create_gpu_machineset g4dn.4xlarge
+  #ocp_aws_create_gpu_machineset g4dn.4xlarge
+  ocp_aws_create_gpu_machineset p3.2xlarge
   ocp_create_machineset_autoscale 0 3
 
   ocp_control_nodes_schedulable
 
   # scale workers to 1
-  WORKER_MS="$(oc -n openshift-machine-api get machineset -o name | grep worker)"
+  WORKER_MS="$(oc -n openshift-machine-api get machineset -o name | grep p3)"
   ocp_scale_machineset 1 "${WORKER_MS}"
 }
 
